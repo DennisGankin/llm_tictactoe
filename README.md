@@ -2,6 +2,8 @@
 
 This is a modern, interactive Tic-Tac-Toe game built with React, TypeScript, and Vite. The app features two types of bot opponents, including one powered by the OpenAI ChatGPT API using function calls for both move selection and playful, cheeky commentary.
 
+Demo (takes a few seconds to load):
+
 ![Demo of Tic-Tac-Toe](./demo.gif)
 
 ## 🎮 Main Features
@@ -41,6 +43,8 @@ This is a modern, interactive Tic-Tac-Toe game built with React, TypeScript, and
 ## 📹 Demo
 
 ![Demo of Tic-Tac-Toe](./demo.gif)
+
+(Takes a few seconds to load)
 
 ## ✨ Why This Project?
 
