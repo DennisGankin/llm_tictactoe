@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './App.css'
 import ollama from 'ollama'
 
@@ -138,6 +138,7 @@ function App() {
   const [chat, setChat] = useState<string[]>([]);
   const [botType, setBotType] = useState<'simple' | 'chatgpt'>('simple');
   const [isBotThinking, setIsBotThinking] = useState(false);
+  const botMoveInProgress = useRef(false);
   const winnerInfo = calculateWinner(board);
   const winner = winnerInfo?.winner || null;
   const winningLine = winnerInfo?.line || [];
@@ -145,7 +146,12 @@ function App() {
 
   // Handle user move
   function handleClick(i: number) {
-    if (board[i] || winner) return;
+    if (board[i] || winner || isBotThinking) return;
+    
+    // Check if it's actually the user's turn
+    const isUserTurn = (xIsNext && user === 'X') || (!xIsNext && user === 'O');
+    if (!isUserTurn) return;
+    
     const newBoard = board.slice();
     newBoard[i] = xIsNext ? 'X' : 'O';
     setBoard(newBoard);
@@ -174,35 +180,77 @@ function App() {
 
   // Bot move effect
   useEffect(() => {
-    if (winner || isDraw) return;
-    if ((xIsNext && bot === 'X') || (!xIsNext && bot === 'O')) {
-      if (botType === 'simple') {
-        const move = botMove(board, bot, user);
-        if (move !== -1) {
-          const newBoard = board.slice();
-          newBoard[move] = bot;
+    // Don't move on initial render
+    if (board.every(sq => sq === null) && user === 'X') {
+      return; // User X should move first
+    }
+    
+    // Early exit conditions
+    if (winner || isDraw || isBotThinking || botMoveInProgress.current) {
+      return;
+    }
+    
+    // Check if it's the bot's turn
+    const currentPlayer = xIsNext ? 'X' : 'O';
+    if (currentPlayer !== bot) {
+      return; // Not the bot's turn
+    }
+    
+    // Bot should make a move
+    botMoveInProgress.current = true;
+    
+    if (botType === 'simple') {
+      const move = botMove(board, bot, user);
+      if (move !== -1) {
+        setTimeout(() => {
+          setBoard(prevBoard => {
+            const newBoard = [...prevBoard];
+            newBoard[move] = bot;
+            return newBoard;
+          });
+          setXIsNext(prev => !prev);
+          botSayRandom();
+          // Use setTimeout to reset on next tick
           setTimeout(() => {
-            setBoard(newBoard);
-            setXIsNext((prev) => !prev);
-            botSayRandom();
-          }, 500);
-        }
-      } else if (botType === 'chatgpt') {
-        setIsBotThinking(true);
-        fetchOllamaMove(board, bot, user).then(({ move, comment }) => {
-          const newBoard = board.slice();
-          newBoard[move] = bot;
-          setBoard(newBoard);
-          setXIsNext((prev) => !prev);
-          botSay(comment);
-        }).finally(() => setIsBotThinking(false));
+            botMoveInProgress.current = false;
+          }, 0);
+        }, 500);
+      } else {
+        botMoveInProgress.current = false;
       }
+    } else if (botType === 'chatgpt') {
+      setIsBotThinking(true);
+      
+      fetchOllamaMove(board, bot, user).then(({ move, comment }) => {
+        setBoard(prevBoard => {
+          const newBoard = [...prevBoard];
+          if (!newBoard[move] && move >= 0 && move <= 8) {
+            newBoard[move] = bot;
+            return newBoard;
+          }
+          return prevBoard;
+        });
+        setXIsNext(prev => !prev);
+        botSay(comment);
+      }).catch(error => {
+        console.error('Bot move error:', error);
+      }).finally(() => {
+        setIsBotThinking(false);
+        // Use setTimeout to reset on next tick
+        setTimeout(() => {
+          botMoveInProgress.current = false;
+        }, 0);
+      });
     }
     // eslint-disable-next-line
   }, [board, xIsNext, bot, user, winner, isDraw, botType]);
 
   // Add chat messages for win/draw
   useEffect(() => {
+    // Only add win/draw messages if the game has actually been played
+    const hasMovesBeenMade = board.some(sq => sq !== null);
+    if (!hasMovesBeenMade) return;
+    
     if (winner) {
       if (winner === bot) {
         botSay('I win! Good game!');
@@ -213,7 +261,7 @@ function App() {
       botSay("It's a draw! Let's play again?");
     }
     // eslint-disable-next-line
-  }, [winner, isDraw]);
+  }, [winner, isDraw, bot]);
 
   // Reset chat on new game or side change
   useEffect(() => {
@@ -235,12 +283,15 @@ function App() {
     setBot(p === 'X' ? 'O' : 'X');
     setBoard(Array(9).fill(null));
     setXIsNext(true); // X always starts
+    setIsBotThinking(false); // Cancel any pending bot thinking
+    botMoveInProgress.current = false; // Reset bot move tracking
   }
 
   // Reset game
   function resetGame() {
     setBoard(Array(9).fill(null));
     setXIsNext(true); // X always starts
+    botMoveInProgress.current = false; // Reset bot move tracking
   }
 
   return (
@@ -266,7 +317,7 @@ function App() {
             <Square
               key={i}
               value={sq}
-              onClick={() => user === (xIsNext ? 'X' : 'O') && handleClick(i)}
+              onClick={() => handleClick(i)}
               highlight={winner ? winningLine.includes(i) : false}
             />
           ))}
