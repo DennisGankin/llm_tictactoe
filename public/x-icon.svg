@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <defs>
+    <style>
+      .o-circle {
+        stroke: #333;
+        stroke-width: 3;
+        fill: none;
+        stroke-linecap: round;
+      }
+    </style>
+  </defs>
+  <rect width="32" height="32" fill="#f0f0f0" rx="4"/>
+  <circle cx="16" cy="16" r="8" class="o-circle"/>
+</svg>
