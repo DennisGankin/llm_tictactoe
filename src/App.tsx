@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './App.css'
+import ollama from 'ollama'
 
 // Types for the board and players
 type Player = 'X' | 'O';
@@ -57,53 +58,58 @@ function Square({ value, onClick, highlight }: { value: Square; onClick: () => v
   );
 }
 
-// --- ChatGPT API integration ---
-async function fetchChatGPTMove(
+// --- Ollama API integration ---
+async function fetchOllamaMove(
   board: Board,
   bot: Player,
   user: Player
 ): Promise<{ move: number; comment: string }> {
-  // You must set your OpenAI API key in an environment variable or config for this to work securely in production.
-  // For demo, this is a direct call. In production, proxy this through a backend!
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-  const systemPrompt = `You are a Tic-Tac-Toe bot. The board is a 3x3 array (0-8). X and O are players. Respond ONLY with a function call: make_move(move: number, comment: string). Your comments should be cheeky, playful, and sometimes a bit teasing. Don't just say you made a move—react to the board, the user's play, or your own brilliance! Always choose a move that maximizes your chances to win or draw, and never make a move that lets the user win if you can prevent it.`;
-  const userPrompt = `Current board: [${board.map((sq) => sq || ' ').join(', ')}]\nBot is: ${bot}\nUser is: ${user}\nIt's your turn. Which move do you make? Add a short comment for the chat.`;
-  const body = {
-    model: 'gpt-3.5-turbo-1106',
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt }
-    ],
-    functions: [
-      {
-        name: 'make_move',
-        description: 'Make a move and provide a comment',
-        parameters: {
-          type: 'object',
-          properties: {
-            move: { type: 'integer', description: 'The board index (0-8) to play' },
-            comment: { type: 'string', description: 'A short comment for the chat' }
-          },
-          required: ['move', 'comment']
-        }
+  const prompt = `You are an expert Tic-Tac-Toe bot. The board is a 3x3 grid with positions 0-8:
+
+Board layout:
+0 | 1 | 2
+---------
+3 | 4 | 5
+---------
+6 | 7 | 8
+
+Current board: [${board.map((sq) => sq || 'empty').join(', ')}]
+You are: ${bot}
+Opponent is: ${user}
+
+STRATEGY (in order of priority):
+1. WIN: If you can win in one move, take it immediately
+2. BLOCK: If opponent can win next turn, block them
+3. CENTER: Take center (position 4) if available - it's the strongest position
+4. CORNERS: Take corners (0,2,6,8) - they create multiple winning paths
+5. SIDES: Only take sides (1,3,5,7) as last resort
+
+Analyze the board carefully and choose the BEST strategic move.
+
+Respond ONLY in this exact JSON format:
+{"move": <number>, "comment": "<your cheeky comment>"}`;
+
+  try {
+    const response = await ollama.chat({
+      model: 'llama3.1',
+      messages: [{ role: 'user', content: prompt }],
+    });
+    
+    const responseText = response.message.content;
+    
+    // Try to extract JSON from the response
+    const jsonMatch = responseText.match(/\{[^}]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (parsed.move !== undefined && parsed.comment && 
+          parsed.move >= 0 && parsed.move <= 8 && !board[parsed.move]) {
+        return { move: parsed.move, comment: parsed.comment };
       }
-    ],
-    function_call: { name: 'make_move' }
-  };
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify(body)
-  });
-  const data = await res.json();
-  const fnCall = data.choices?.[0]?.message?.function_call;
-  if (fnCall && fnCall.arguments) {
-    const args = JSON.parse(fnCall.arguments);
-    return { move: args.move, comment: args.comment };
+    }
+  } catch (error) {
+    console.error('Ollama API error:', error);
   }
+  
   // fallback: use the simple bot logic
   const fallbackMove = botMove(board, bot, user);
   const phrases = [
@@ -183,7 +189,7 @@ function App() {
         }
       } else if (botType === 'chatgpt') {
         setIsBotThinking(true);
-        fetchChatGPTMove(board, bot, user).then(({ move, comment }) => {
+        fetchOllamaMove(board, bot, user).then(({ move, comment }) => {
           const newBoard = board.slice();
           newBoard[move] = bot;
           setBoard(newBoard);
@@ -252,7 +258,7 @@ function App() {
             Simple{botType === 'simple' ? ' ✓' : ''}
           </button>
           <button className={botType === 'chatgpt' ? 'active' : ''} onClick={() => setBotType('chatgpt')}>
-            ChatGPT{botType === 'chatgpt' ? ' ✓' : ''}
+            Ollama{botType === 'chatgpt' ? ' ✓' : ''}
           </button>
         </div>
         <div className="board">
@@ -279,7 +285,7 @@ function App() {
         <button className="reset-btn" onClick={resetGame}>Restart</button>
       </div>
       <div className="chat-container">
-        <h2>Bot Chat ({botType === 'simple' ? 'Simple' : 'ChatGPT'})</h2>
+        <h2>Bot Chat ({botType === 'simple' ? 'Simple' : 'Ollama'})</h2>
         <div className="chat-bubbles">
           {visibleChat.map((msg, i) => (
             <div key={i} className="bot-bubble">{msg}</div>
