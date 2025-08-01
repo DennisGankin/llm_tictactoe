@@ -120,10 +120,36 @@
   height: 370px;
   margin-top: 0.5rem;
 }
+.chat-header {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
 .chat-container h2 {
   font-size: 1.1rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
   color: #1976d2;
+}
+.thinking-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: #666;
+  margin-bottom: 0.5rem;
+}
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e0e0e0;
+  border-top: 2px solid #1976d2;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 .chat-bubbles {
   display: flex;
@@ -132,6 +158,7 @@
   width: 100%;
   overflow-y: auto;
   flex: 1;
+  margin-top: 0.5rem;
 }
 .bot-bubble {
   background: #e3f2fd;

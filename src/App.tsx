@@ -62,9 +62,21 @@ function Square({ value, onClick, highlight }: { value: Square; onClick: () => v
 async function fetchOllamaMove(
   board: Board,
   bot: Player,
-  user: Player
+  user: Player,
+  chatHistory: string[] = [],
+  retryAttempt: number = 0
 ): Promise<{ move: number; comment: string }> {
-  const prompt = `You are an expert Tic-Tac-Toe bot. The board is a 3x3 grid with positions 0-8:
+  const chatContext = chatHistory.length > 0 
+    ? `\n\nYour previous comments this game:\n${chatHistory.slice(-4).map((msg, i) => `Move ${i + 1}: "${msg}"`).join('\n')}\n`
+    : '';
+
+  const availablePositions = board.map((sq, i) => sq === null ? i : null).filter(i => i !== null);
+  
+  const retryMessage = retryAttempt > 0 
+    ? `\n\n⚠️ RETRY ATTEMPT: Your previous move was INVALID because that position was already occupied. You MUST choose from the available positions only.`
+    : '';
+  
+  const prompt = `You are a witty, competitive Tic-Tac-Toe bot with personality. The board is a 3x3 grid with positions 0-8:
 
 Board layout:
 0 | 1 | 2
@@ -73,9 +85,12 @@ Board layout:
 ---------
 6 | 7 | 8
 
-Current board: [${board.map((sq) => sq || 'empty').join(', ')}]
+Current board: [${board.map((sq, i) => `${i}:${sq || 'empty'}`).join(', ')}]
 You are: ${bot}
-Opponent is: ${user}
+Opponent is: ${user}${chatContext}${retryMessage}
+
+AVAILABLE POSITIONS: You can ONLY choose from these empty positions: [${availablePositions.join(', ')}]
+CRITICAL: You MUST choose a position from the available list above. Any other position is invalid and occupied!
 
 STRATEGY (in order of priority):
 1. WIN: If you can win in one move, take it immediately
@@ -83,31 +98,70 @@ STRATEGY (in order of priority):
 3. CENTER: Take center (position 4) if available - it's the strongest position
 4. CORNERS: Take corners (0,2,6,8) - they create multiple winning paths
 5. SIDES: Only take sides (1,3,5,7) as last resort
+6. AVAILABLE POSITIONS ONLY: Do not choose any position that is not in the available positions list: [${availablePositions.join(', ')}]
 
-Analyze the board carefully and choose the BEST strategic move.
+Analyze the board carefully and choose the BEST strategic move from the AVAILABLE POSITIONS ONLY. Make a witty, engaging comment that reflects your personality and the current game situation. Keep it short, one sentence maximum. Try to vary your tone and style from your previous comments to keep things interesting.
+
+Also provide a brief explanation of why you chose this specific position for debugging purposes.
+
+Choose your current move from these available positions [${availablePositions.join(', ')}]
 
 Respond ONLY in this exact JSON format:
-{"move": <number>, "comment": "<your cheeky comment>"}`;
+{"move": <number>, "comment": "<your engaging, contextual comment>", "explanation": "<brief explanation of why you chose this move>"}`;
 
   try {
+    console.log('🤖 Sending prompt to Ollama:', prompt);
+    
     const response = await ollama.chat({
       model: 'llama3.1',
       messages: [{ role: 'user', content: prompt }],
     });
     
     const responseText = response.message.content;
+    console.log('🎯 Ollama raw response:', responseText);
     
     // Try to extract JSON from the response
     const jsonMatch = responseText.match(/\{[^}]*\}/);
     if (jsonMatch) {
+      console.log('📝 Extracted JSON:', jsonMatch[0]);
       const parsed = JSON.parse(jsonMatch[0]);
+      console.log('✅ Parsed response:', parsed);
+      
       if (parsed.move !== undefined && parsed.comment && 
           parsed.move >= 0 && parsed.move <= 8 && !board[parsed.move]) {
+        console.log('🚀 Ollama move successful - Move:', parsed.move, 'Comment:', parsed.comment);
+        if (parsed.explanation) {
+          console.log('🧠 Bot reasoning:', parsed.explanation);
+        }
         return { move: parsed.move, comment: parsed.comment };
+      } else {
+        console.log('❌ Invalid move data:', {
+          move: parsed.move,
+          comment: parsed.comment,
+          explanation: parsed.explanation,
+          moveInRange: parsed.move >= 0 && parsed.move <= 8,
+          squareEmpty: !board[parsed.move],
+          availablePositions: availablePositions
+        });
+        
+        // If the move is invalid because the position is occupied and we haven't retried yet
+        if (parsed.move >= 0 && parsed.move <= 8 && board[parsed.move] && retryAttempt === 0) {
+          console.log('🔄 Position', parsed.move, 'is occupied, retrying with clearer instructions...');
+          return fetchOllamaMove(board, bot, user, chatHistory, 1);
+        }
       }
+    } else {
+      console.log('❌ No JSON found in response');
     }
+    
+    console.log('⚠️ Ollama response format invalid, falling back to simple bot');
   } catch (error) {
-    console.error('Ollama API error:', error);
+    console.error('💥 Ollama API error (falling back to simple bot):', error);
+  }
+  
+  // Log retry information
+  if (retryAttempt > 0) {
+    console.log('🚫 Retry attempt failed, falling back to simple bot logic');
   }
   
   // fallback: use the simple bot logic
@@ -124,10 +178,13 @@ Respond ONLY in this exact JSON format:
     "I like your style!"
   ];
   const idx = Math.floor(Math.random() * phrases.length);
-  return {
+  const fallbackResult = {
     move: fallbackMove,
     comment: phrases[idx]
   };
+  
+  console.log('🔄 Using fallback bot logic - Move:', fallbackResult.move, 'Comment:', fallbackResult.comment);
+  return fallbackResult;
 }
 
 function App() {
@@ -221,7 +278,7 @@ function App() {
     } else if (botType === 'chatgpt') {
       setIsBotThinking(true);
       
-      fetchOllamaMove(board, bot, user).then(({ move, comment }) => {
+      fetchOllamaMove(board, bot, user, chat).then(({ move, comment }) => {
         setBoard(prevBoard => {
           const newBoard = [...prevBoard];
           if (!newBoard[move] && move >= 0 && move <= 8) {
@@ -291,6 +348,7 @@ function App() {
   function resetGame() {
     setBoard(Array(9).fill(null));
     setXIsNext(true); // X always starts
+    setChat([]); // Clear chat history
     botMoveInProgress.current = false; // Reset bot move tracking
   }
 
@@ -336,7 +394,15 @@ function App() {
         <button className="reset-btn" onClick={resetGame}>Restart</button>
       </div>
       <div className="chat-container">
-        <h2>Bot Chat ({botType === 'simple' ? 'Simple' : 'Ollama'})</h2>
+        <div className="chat-header">
+          <h2>Bot Chat ({botType === 'simple' ? 'Simple' : 'Ollama'})</h2>
+          {isBotThinking && (
+            <div className="thinking-indicator">
+              <div className="spinner"></div>
+              <span>Thinking...</span>
+            </div>
+          )}
+        </div>
         <div className="chat-bubbles">
           {visibleChat.map((msg, i) => (
             <div key={i} className="bot-bubble">{msg}</div>
