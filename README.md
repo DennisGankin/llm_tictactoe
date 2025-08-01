@@ -1,6 +1,6 @@
 # Tic-Tac-Toe Web App
 
-This is a modern, interactive Tic-Tac-Toe game built with React, TypeScript, and Vite. The app features two types of bot opponents, including one powered by the OpenAI ChatGPT API using function calls for both move selection and playful, cheeky commentary.
+This is a modern, interactive Tic-Tac-Toe game built with React, TypeScript, and Vite. The app features two types of bot opponents, including one powered by Llama 3.1 8B running locally via Ollama for both move selection and playful, cheeky commentary.
 
 Demo (takes a few seconds to load):
 
@@ -12,7 +12,7 @@ Demo (takes a few seconds to load):
 - **Choose your side**: Play as X or O.
 - **Play against two types of bots**:
   - **Simple Bot**: Makes smart but not perfect moves.
-  - **ChatGPT Bot**: Uses OpenAI's ChatGPT API (with function calls) to decide its moves and comment on the game with cheeky, playful messages.
+  - **Ollama Bot**: Uses Llama 3.1 8B running locally via Ollama to decide its moves and comment on the game with cheeky, playful messages.
 - **Bot Chat**: See the bot's comments in a chat bubble next to the game board for a more interactive experience.
 - **Winning Highlight**: Only the winning line is highlighted when someone wins.
 - **Restart and Side Switch**: Easily restart the game or switch sides at any time.
@@ -22,7 +22,7 @@ Demo (takes a few seconds to load):
 - **React**: For building the user interface.
 - **TypeScript**: For type safety and better code quality.
 - **Vite**: For fast development and build tooling.
-- **OpenAI API**: The ChatGPT bot uses OpenAI's API with function calls to generate moves and fun comments.
+- **Ollama**: For running Llama 3.1 8B locally to power the AI bot with strategic moves and fun commentary.
 
 ## 🚀 How to Run
 
@@ -30,9 +30,16 @@ Demo (takes a few seconds to load):
    ```sh
    npm install
    ```
-2. **Add your OpenAI API key** to a `.env` file in the project root:
-   ```env
-   VITE_OPENAI_API_KEY=sk-...
+2. **Install and run Ollama** with Llama 3.1:
+   ```sh
+   # Install Ollama (if not already installed)
+   # Visit https://ollama.ai for installation instructions
+   
+   # Pull the Llama 3.1 model
+   ollama pull llama3.1
+   
+   # Start Ollama (runs on http://localhost:11434)
+   ollama serve
    ```
 3. **Start the development server:**
    ```sh
@@ -50,7 +57,7 @@ Demo (takes a few seconds to load):
 
 This project demonstrates:
 - Building modern, user-friendly web apps
-- Integrating third-party APIs (OpenAI) with function calls
+- Integrating local AI models (Llama 3.1 8B) via Ollama
 - Creating interactive, engaging user experiences
 - Writing clean, maintainable code with React and TypeScript
 
